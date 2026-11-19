@@ -98,7 +98,7 @@ body{background:radial-gradient(ellipse at 50% 0,#ccecef,#8bc4c9 76%)}
 .reindeer-art{filter:url(#reindeer-wave)}
 .character:focus-visible{outline:2px dashed #1b565a;outline-offset:-3px}
 .top .snowfall{z-index:4;pointer-events:none}
-.top .santa-pass{z-index:2;top:34%}
+.top .santa-pass{z-index:6;top:34%}
 @media(prefers-reduced-motion:reduce),print{.character img,.character svg{animation:none}.reindeer-art{filter:none}}
 
 .top .party-title{gap:.10em;overflow:visible;filter:drop-shadow(0 2px 0 #e9feffb0)}
@@ -233,23 +233,33 @@ html.scroll-fades .intro[data-reveal].revealed{
     anchor: element.classList.contains('intro') ? element.parentElement : element
   }));
   let pendingFrame = false;
+  let previousPosition = null;
 
   function revealVisibleCards() {
     pendingFrame = false;
     const viewport = window.visualViewport;
     const top = viewport?.offsetTop || 0;
     const height = viewport?.height || window.innerHeight;
-    const upperLine = top + Math.min(height * .17, 105);
-    const lowerLine = top + height - Math.min(height * .24, 150);
     const scrollRoot = document.scrollingElement;
-    const atBottom = scrollRoot && scrollRoot.scrollHeight - scrollRoot.clientHeight - scrollRoot.scrollTop < 3;
+    const scrollTop = Math.max(0, scrollRoot?.scrollTop ?? window.scrollY ?? 0);
+    const position = scrollTop + top;
+    const firstFrame = previousPosition === null;
+    const goingUp = !firstFrame && position < previousPosition;
+    const goingDown = !firstFrame && position > previousPosition;
+    previousPosition = position;
+
+    const entryLine = top + height - Math.min(height * .24, 150);
+    const exitLine = entryLine + Math.min(height * .035, 22);
+    const atBottom = scrollRoot && scrollRoot.scrollHeight - scrollRoot.clientHeight - scrollTop < 3;
 
     for (const {element, anchor} of sections) {
       const bounds = anchor.getBoundingClientRect();
-      // Use the span of very tall cards instead of their midpoint on small screens.
-      const inset = Math.min(bounds.height / 2, height * .12);
-      const bottomLine = atBottom ? top + height : lowerLine;
-      element.classList.toggle('revealed', bounds.bottom - inset > upperLine && bounds.top + inset < bottomLine);
+      const trigger = bounds.top + Math.min(bounds.height / 2, height * .12);
+      if (goingUp) {
+        if (trigger > exitLine) element.classList.remove('revealed');
+      } else if (firstFrame || goingDown) {
+        if (trigger <= (atBottom ? top + height : entryLine)) element.classList.add('revealed');
+      }
     }
   }
 
@@ -259,15 +269,20 @@ html.scroll-fades .intro[data-reveal].revealed{
     requestAnimationFrame(revealVisibleCards);
   }
 
+  function resetReveal() {
+    previousPosition = null;
+    queueReveal();
+  }
+
   function configureReveal() {
     document.documentElement.classList.toggle('scroll-fades', !reducedMotion.matches);
-    if (!reducedMotion.matches) requestAnimationFrame(queueReveal);
+    if (!reducedMotion.matches) requestAnimationFrame(resetReveal);
   }
 
   window.addEventListener('scroll', queueReveal, {passive:true, capture:true});
-  window.addEventListener('resize', queueReveal);
-  window.addEventListener('pageshow', queueReveal);
-  window.visualViewport?.addEventListener('resize', queueReveal);
+  window.addEventListener('resize', resetReveal);
+  window.addEventListener('pageshow', resetReveal);
+  window.visualViewport?.addEventListener('resize', resetReveal);
   window.visualViewport?.addEventListener('scroll', queueReveal);
   reducedMotion.addEventListener('change', configureReveal);
   configureReveal();
